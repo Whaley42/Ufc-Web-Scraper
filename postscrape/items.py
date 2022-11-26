@@ -24,17 +24,17 @@ class PostscrapeItem(scrapy.Item):
     Sig_Str_Head = scrapy.Field()
     Sig_Str_Body = scrapy.Field()
     Sig_Str_Leg = scrapy.Field()
-
     Takedowns_Landed = scrapy.Field()
     Takedowns_Attempted = scrapy.Field()
     Takedown_avg = scrapy.Field()
     Takedown_Defense = scrapy.Field()
     Submission_avg = scrapy.Field()
-
     KO_TKO = scrapy.Field()
     DEC = scrapy.Field()
     SUB = scrapy.Field()
     Average_fight_time = scrapy.Field()
+    Reach = scrapy.Field()
+    Leg_reach = scrapy.Field()
 
     Status = scrapy.Field()
     Hometown = scrapy.Field()
@@ -44,12 +44,9 @@ class PostscrapeItem(scrapy.Item):
     Height = scrapy.Field()
     Weight = scrapy.Field()
     Octagon_Debut = scrapy.Field()
-    Reach = scrapy.Field()
-    Leg_reach = scrapy.Field()
     Division = scrapy.Field()
     first_name = scrapy.Field()
     last_name = scrapy.Field()
-
     Fights = scrapy.Field()
 
 

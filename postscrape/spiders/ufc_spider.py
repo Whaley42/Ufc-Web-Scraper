@@ -2,7 +2,12 @@ import scrapy
 from .. items import PostscrapeItem
 from . UfcDataCleaner import UfcDataCleaner as clean
 from . UfcPipeline import UfcPipeline as pipeline
-import csv
+from . UfcAPI import UfcAPI as api
+import json
+import concurrent.futures
+from itertools import repeat
+import time
+
 
 class UfcSpider(scrapy.Spider):
     name = 'ufc'
@@ -10,46 +15,41 @@ class UfcSpider(scrapy.Spider):
     
     def __init__(self, name=None, **kwargs):
         self.items = PostscrapeItem()
+        self.items['Fights'] = 0
         self.amount_fights = 0
-        self.amount_called = 0
         self.nums = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9' ]
         self.cleaner = clean()
         self.pipeline = pipeline()
-        
-        
+        self.base_url = "https://www.ufc.com/athletes/all?gender=All&search=&page="
+        self.next_page_num = 0
+        self.next_page = self.base_url + str(self.next_page_num)
+        self.current_page = 0
+        self.api = ''
+     
+
+    
     
 
     def parse(self, response):
+      
+        athletes = response.css('.c-listing-athlete-flipcard__back')
         
-        athletes = response.css('.c-listing-athlete-flipcard__back').extract()
-
-        # print(len(athletes))
-        for athlete in response.css('.c-listing-athlete-flipcard__back'):
-            
+        for athlete in athletes:
+                
             link =  athlete.css('a::attr(href)').get()
             
             yield response.follow(url=link, callback=self.parse_athlete)
-            
-            # fights = response.css('#athlete-record .datetime::text').extract()
-            # self.amount_fights += len(fights)
-            # fight_page = response.css('li.pager__item a::attr(href)').get()
-            # if fight_page is not None:
-            #     yield response.follow(fight_page, callback= self.parse)
-            
-            # self.response = response
-            # self.get_stats_records(response)
-            # self.get_accuracy_stats(response)
-            # self.get_base_stats(response)
-            # self.get_misc_stats(response)
-            # self.get_target_stats(response)
-            # self.get_bio(response)
-            
-            
-
-            # self.items["Fights"] = self.amount_fights
-            # self.items["amount_called"] = self.amount_called
-            
-        # yield self.items
+        
+        
+        
+        self.next_page_num += 1
+        
+        
+        if len(athletes) != 0:
+            self.current_page += 1
+            self.next_page = self.base_url + str(self.next_page_num)
+            yield response.follow(url=self.next_page, callback=self.parse)
+        
 
     def parse_athlete(self, response):
         self.get_basic_info(response)
@@ -58,24 +58,82 @@ class UfcSpider(scrapy.Spider):
         self.get_misc_stats(response)
         self.get_target_stats(response)
         self.get_bio(response)
-        # print(self.items)
+        self.parse_fights(response)
         clean_dict = self.cleaner.clean_data(athlete_info=dict(self.items))
         self.items.clear()
+        self.items['Fights'] = 0
+        #print(clean_dict)
         self.pipeline.send_to_csv(clean_dict)
         
+    def parse_fights(self, response):
+        script_text = response.xpath('/html/head/script[@data-drupal-selector]//text()').extract_first()
+        script = json.loads(script_text)
+        pretty = json.dumps(script, indent=4)
+        threads = 12
+        
+
+
+        try:
+            dom_key = list(script['views']['ajaxViews'].keys())[0]
+            ajax = script['views']['ajaxViews'][dom_key]
+            view_args = ajax['view_args']
+            view_path = ajax['view_path']
+            view_dom_id = ajax['view_dom_id']
+            # ufc_api = api()
+            ufc_api = api(view_args, view_path, view_dom_id)
+            # fight_results = ufc_api.get_responsev2()
+            # while fight_results != '':
+            #     self.items['Fights'] += fight_results.count('c-card-event--athlete-results__headline')
+            #     ufc_api.next_page()
+            #     fight_results = ufc_api.get_responsev2()
+            
+            # print(f"----Name----: {self.items['first_name']}")
+            # print(f"Total fights: {self.items['Fights']} ")
+                
+
+            
+         
+            # print(f"----Name----: {self.items['first_name']}")           
+            # ufc_api.set_args(view_args, view_path, view_dom_id)
+            test_lst = [0,1,2,3,4,5,6,7,8,9,10,11,11]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+                for result in executor.map(ufc_api.get_response, test_lst):
+                    # self.items['Fights'] += result.count('c-card-event--athlete-results__headline')
+                    amount_fights = result.count('c-card-event--athlete-results__headline')
+                    if amount_fights == 0:
+                        break
+                    self.items['Fights'] += amount_fights
+
+                    
+                    # # print(result)
+                    
+            
+            # fight_data = ufc_api.get_response()
+        except Exception as e:
+            print(e)
+        # print(f"{self.items['Fights']}")
+        self.items['Fights'] = str(self.items['Fights'])
+        
+
 
 
     def get_basic_info(self, response):
         name = str(response.css('.hero-profile__name::text').extract_first())
         division = response.css('.hero-profile__division-title::text').extract_first()
        
-        names = name.split(" ")
-        self.items['first_name'] = names[0]
-        self.items['last_name'] = names[1]
-        self.items['Division'] = division
-    
+        if " " in name:
+            names = name.split(" ")
+            self.items['first_name'] = names[0]
+            self.items['last_name'] = names[1]
+        else:
+            self.items['first_name'] = name
+            self.items['last_name'] = ''
+        if division == None:
+            self.items['Division'] = 'Unknown'
+        else:
+            self.items['Division'] = division
         
-
+    
 
 
     def format_list(self, lst):
@@ -85,19 +143,7 @@ class UfcSpider(scrapy.Spider):
             value = lst[i]
             new_lst.append({key:value})
         return new_lst
-    
-    # def get_stats_records(self, response):
-    #     stats_records = response.css('.athlete-stats__text::text').extract()
-    #     stats_records_len = len(stats_records)
-    #     if stats_records_len > 0:
-    #         stats_formatted = self.format_list(stats_records)
-    #         self.items['stat_1'] = stats_formatted[0]
-    #         self.items['stat_2'] = stats_formatted[1]
-    #         self.items['stat_3'] = stats_formatted[2]
-    #     else:
-    #         self.items['stat_1'] = "N/A"
-    #         self.items['stat_2'] = "N/A"
-    #         self.items['stat_3'] = "N/A"
+
     
     def get_accuracy_stats(self, response):
         accuracy = response.css('.c-overlap__stats-text::text , .c-overlap__stats-value::text').extract()
@@ -125,10 +171,13 @@ class UfcSpider(scrapy.Spider):
         sig_strike_head = response.css('text#e-stat-body_x5F__x5F_head_value::text').extract_first()
         sig_strike_body = response.css('text#e-stat-body_x5F__x5F_body_value::text').extract_first()
         sig_strike_leg = response.css('text#e-stat-body_x5F__x5F_leg_value::text').extract_first()
+        if sig_strike_head != None:
+            self.items['Sig_Str_Head'] = sig_strike_head
+        if sig_strike_body != None:
+            self.items['Sig_Str_Body'] = sig_strike_body
+        if sig_strike_leg != None:
+            self.items['Sig_Str_Leg'] = sig_strike_leg
 
-        self.items['Sig_Str_Head'] = sig_strike_head
-        self.items['Sig_Str_Body'] = sig_strike_body
-        self.items['Sig_Str_Leg'] = sig_strike_leg
 
 
     def combine_lists(self, list1, list2):
@@ -171,13 +220,6 @@ class UfcSpider(scrapy.Spider):
         self.add_items(comp_dict)
         
 
-        # print(name)
-        # print(formatted_comp_list)
-        # print(len(comparison_labels))
-        # print(len(comparison_values))
-        # if len(comparison_labels) == len(comparison_values):
-        #     comparison_dict = self.lists_to_dict(comparison_labels, comparison_values)
-        #     self.add_items(comparison_dict)
     
     def clean_accuracy_list(self, accuracy_list):
         #If the next value is not a number, and the current is not a number, add a 0

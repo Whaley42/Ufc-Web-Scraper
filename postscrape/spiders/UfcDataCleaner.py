@@ -11,6 +11,9 @@ class UfcDataCleaner:
     def clean_data(self, athlete_info):
         
         for dataK, dataV in athlete_info.items():
+            if dataV == None:
+                print(1)
+                print(dataK)
             data = dataV.strip()
             
             if '%' in data:
