@@ -11,11 +11,14 @@ class UfcDataCleaner:
     def clean_data(self, athlete_info):
         
         for dataK, dataV in athlete_info.items():
-            if dataV == None:
-                print(1)
-                print(dataK)
-            data = dataV.strip()
             
+
+            data = dataV.strip()
+           
+            if dataK == 'Average_fight_time':
+                (m, s) = dataV.split(':')
+                result = int(m) * 60 + int(s)
+                data = str(result / 60)
             if '%' in data:
                 data_list = data.split(" ")
                 data = data_list[0]

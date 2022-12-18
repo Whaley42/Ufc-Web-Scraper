@@ -12,8 +12,8 @@ class UfcPipeline:
         self.fact_table_heading = ["Bio ID", "Sig. Strikes Landed", "Sig. Strikes Attempted", "Sig. Strikes Landed Per Min", "Sig. Strikes Absorbed Per Min"
                             ,"Sig. Strike Defense", "Knockdown Average", "Sig. Strikes Standing", "Sig. Strikes Clinch", "Sig. Strikes Ground", "Sig. Strikes Head"
                             ,"Sig. Strikes Body", "Sig. Strikes Leg", "Takedowns Landed", "Takedowns Attempted", "Takedown Average", "Takedown Defense", "Submission Average"
-                            ,"KO/TKO","DEC","SUB","Reach","Leg Reach", "Average Fight Time", "Number of Fights"]
-        self.bio_table_heading = ["Bio ID", "First Name", "Last Name", "Division", "Status", "Hometown", "Fighting Style", "Trains At", "Age", "Height", "Weight", "Octagon Debut"]
+                            ,"KO/TKO","DEC","SUB","Reach","Leg Reach", "Average Fight Time","Age", "Height","Number of Fights"]
+        self.bio_table_heading = ["Bio ID", "First Name", "Last Name", "Division", "Status", "Hometown", "Fighting Style", "Trains At", "Octagon Debut"]
     
         with open("Ufc-Fact-Table.csv", "w", newline='', encoding='utf-8-sig') as csvfile:
             csvwriter = csv.writer(csvfile)
@@ -47,9 +47,9 @@ class UfcPipeline:
             
             fact_data = [self.surrogate_key, data['Sig_Strikes_Landed'], data['Sig_Strikes_Attempted'], data['Sig_Str_Landed'], data['Sig_Str_Absorbed'], data['Sig_Str_Defense'], data['Knockdown_Avg']
                         ,data['Standing'], data['Clinch'], data['Ground'], data['Sig_Str_Head'], data['Sig_Str_Body'], data['Sig_Str_Leg'], data['Takedowns_Landed'], data['Takedowns_Attempted']
-                        ,data['Takedown_avg'], data['Takedown_Defense'],data['Submission_avg'], data['KO_TKO'], data['DEC'], data['SUB'], data['Reach'], data['Leg_reach'], data['Average_fight_time'], data['Fights']]
-            bio_data = [self.surrogate_key, data['first_name'], data['last_name'], data['Division'], data['Status'], data['Hometown'], data['Fighting_style'], data['Trains_at'], data['Age'], data['Height']
-                        ,data['Weight'], data['Octagon_Debut']]
+                        ,data['Takedown_avg'], data['Takedown_Defense'],data['Submission_avg'], data['KO_TKO'], data['DEC'], data['SUB'], data['Reach'], data['Leg_reach'], data['Average_fight_time']
+                        ,data['Age'] ,data['Height'] ,data['Fights']]
+            bio_data = [self.surrogate_key, data['first_name'], data['last_name'], data['Division'], data['Status'], data['Hometown'], data['Fighting_style'], data['Trains_at'],data['Octagon_Debut']]
             try:
                 self.surrogate_key +=1
                 self.fact_writer.writerow(fact_data)

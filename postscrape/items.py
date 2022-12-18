@@ -37,7 +37,7 @@ class PostscrapeItem(scrapy.Item):
     Leg_reach = scrapy.Field()
 
     Status = scrapy.Field()
-    Hometown = scrapy.Field()
+    Place_of_Birth = scrapy.Field()
     Fighting_style = scrapy.Field()
     Trains_at = scrapy.Field()
     Age = scrapy.Field()

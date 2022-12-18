@@ -5,8 +5,9 @@ from . UfcPipeline import UfcPipeline as pipeline
 from . UfcAPI import UfcAPI as api
 import json
 import concurrent.futures
-from itertools import repeat
-import time
+import pyspark
+from pyspark.sql import SparkSession
+
 
 
 class UfcSpider(scrapy.Spider):
@@ -25,6 +26,13 @@ class UfcSpider(scrapy.Spider):
         self.next_page = self.base_url + str(self.next_page_num)
         self.current_page = 0
         self.api = ''
+        spark = SparkSession.builder.appName('UFC').getOrCreate()
+        self.df_fact = spark.createDataFrame(["Bio ID", "Sig. Strikes Landed", "Sig. Strikes Attempted", "Sig. Strikes Landed Per Min", "Sig. Strikes Absorbed Per Min"
+                            ,"Sig. Strike Defense", "Knockdown Average", "Sig. Strikes Standing", "Sig. Strikes Clinch", "Sig. Strikes Ground", "Sig. Strikes Head"
+                            ,"Sig. Strikes Body", "Sig. Strikes Leg", "Takedowns Landed", "Takedowns Attempted", "Takedown Average", "Takedown Defense", "Submission Average"
+                            ,"KO/TKO","DEC","SUB","Reach","Leg Reach", "Average Fight Time","Age", "Height","Number of Fights"])
+        self.df_dim_bio = spark.createDataFrame(["Bio ID", "First Name", "Last Name", "Division", "Status", "Hometown", "Fighting Style", "Trains At", "Octagon Debut"], headers=True)
+        
      
 
     
@@ -45,10 +53,10 @@ class UfcSpider(scrapy.Spider):
         self.next_page_num += 1
         
         
-        if len(athletes) != 0:
-            self.current_page += 1
-            self.next_page = self.base_url + str(self.next_page_num)
-            yield response.follow(url=self.next_page, callback=self.parse)
+        # if len(athletes) != 0:
+        #     self.current_page += 1
+        #     self.next_page = self.base_url + str(self.next_page_num)
+        #     yield response.follow(url=self.next_page, callback=self.parse)
         
 
     def parse_athlete(self, response):
@@ -60,8 +68,10 @@ class UfcSpider(scrapy.Spider):
         self.get_bio(response)
         self.parse_fights(response)
         clean_dict = self.cleaner.clean_data(athlete_info=dict(self.items))
+        yield self.items
         self.items.clear()
         self.items['Fights'] = 0
+
         #print(clean_dict)
         self.pipeline.send_to_csv(clean_dict)
         
