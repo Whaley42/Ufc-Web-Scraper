@@ -5,8 +5,10 @@ from . UfcPipeline import UfcPipeline as pipeline
 from . UfcAPI import UfcAPI as api
 import json
 import concurrent.futures
-import pyspark
+import logging
+from pyspark.sql.types import StructType,StructField, StringType, IntegerType
 from pyspark.sql import SparkSession
+import itertools
 
 
 
@@ -15,9 +17,9 @@ class UfcSpider(scrapy.Spider):
     start_urls = ['https://www.ufc.com/athletes/all?gender=All&search=&page=0']
     
     def __init__(self, name=None, **kwargs):
-        self.items = PostscrapeItem()
-        self.items['Fights'] = 0
-        self.amount_fights = 0
+        
+        self.current_id = 0
+        self.data = self.reset_data()
         self.nums = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9' ]
         self.cleaner = clean()
         self.pipeline = pipeline()
@@ -26,12 +28,21 @@ class UfcSpider(scrapy.Spider):
         self.next_page = self.base_url + str(self.next_page_num)
         self.current_page = 0
         self.api = ''
-        spark = SparkSession.builder.appName('UFC').getOrCreate()
-        self.df_fact = spark.createDataFrame(["Bio ID", "Sig. Strikes Landed", "Sig. Strikes Attempted", "Sig. Strikes Landed Per Min", "Sig. Strikes Absorbed Per Min"
+
+        logging.getLogger("py4j").setLevel(logging.INFO)
+        self.fact_heading = ["Bio ID", "Sig. Strikes Landed", "Sig. Strikes Attempted", "Sig. Strikes Landed Per Min", "Sig. Strikes Absorbed Per Min"
                             ,"Sig. Strike Defense", "Knockdown Average", "Sig. Strikes Standing", "Sig. Strikes Clinch", "Sig. Strikes Ground", "Sig. Strikes Head"
                             ,"Sig. Strikes Body", "Sig. Strikes Leg", "Takedowns Landed", "Takedowns Attempted", "Takedown Average", "Takedown Defense", "Submission Average"
-                            ,"KO/TKO","DEC","SUB","Reach","Leg Reach", "Average Fight Time","Age", "Height","Number of Fights"])
-        self.df_dim_bio = spark.createDataFrame(["Bio ID", "First Name", "Last Name", "Division", "Status", "Hometown", "Fighting Style", "Trains At", "Octagon Debut"], headers=True)
+                            ,"KO/TKO","DEC","SUB","Reach","Leg Reach", "Average Fight Time","Age", "Height","Number of Fights"]
+        
+        self.bio_heading = ["Bio ID", "First Name", "Last Name", "Division", "Status", "Hometown", "Fighting Style", "Trains At", "Octagon Debut"]
+
+        schema_fact, schema_bio = self.create_schemas()
+        self.spark = SparkSession.builder.appName('ufc').getOrCreate()
+        
+        self.df_fact = self.spark.createDataFrame([],schema=schema_fact)
+        self.df_bio = self.spark.createDataFrame([], schema=schema_bio)
+        
         
      
 
@@ -39,6 +50,7 @@ class UfcSpider(scrapy.Spider):
     
 
     def parse(self, response):
+        
       
         athletes = response.css('.c-listing-athlete-flipcard__back')
         
@@ -50,13 +62,14 @@ class UfcSpider(scrapy.Spider):
         
         
         
-        self.next_page_num += 1
+        # self.next_page_num += 1
         
         
         # if len(athletes) != 0:
         #     self.current_page += 1
         #     self.next_page = self.base_url + str(self.next_page_num)
         #     yield response.follow(url=self.next_page, callback=self.parse)
+
         
 
     def parse_athlete(self, response):
@@ -67,13 +80,19 @@ class UfcSpider(scrapy.Spider):
         self.get_target_stats(response)
         self.get_bio(response)
         self.parse_fights(response)
-        clean_dict = self.cleaner.clean_data(athlete_info=dict(self.items))
-        yield self.items
-        self.items.clear()
-        self.items['Fights'] = 0
+        bio_data, fact_data = self.seperate_tables(self.data)
+        clean_fact = self.cleaner.clean_data(fact_data)
+        clean_bio = self.cleaner.clean_data(bio_data)
+        new_row_fact = self.spark.createDataFrame([clean_fact], self.fact_heading)
+        new_row_bio = self.spark.createDataFrame([clean_bio], self.bio_heading)
 
-        #print(clean_dict)
-        self.pipeline.send_to_csv(clean_dict)
+        self.df_fact = self.df_fact.union(new_row_fact)
+        self.df_bio = self.df_bio.union(new_row_bio)
+        self.data = self.reset_data()
+
+        self.df_fact.show(vertical=True)
+        self.df_bio.show(vertical=True)
+        # self.pipeline.send_to_csv(clean_dict)
         
     def parse_fights(self, response):
         script_text = response.xpath('/html/head/script[@data-drupal-selector]//text()').extract_first()
@@ -89,40 +108,29 @@ class UfcSpider(scrapy.Spider):
             view_args = ajax['view_args']
             view_path = ajax['view_path']
             view_dom_id = ajax['view_dom_id']
-            # ufc_api = api()
+           
             ufc_api = api(view_args, view_path, view_dom_id)
-            # fight_results = ufc_api.get_responsev2()
-            # while fight_results != '':
-            #     self.items['Fights'] += fight_results.count('c-card-event--athlete-results__headline')
-            #     ufc_api.next_page()
-            #     fight_results = ufc_api.get_responsev2()
             
-            # print(f"----Name----: {self.items['first_name']}")
-            # print(f"Total fights: {self.items['Fights']} ")
-                
-
-            
-         
-            # print(f"----Name----: {self.items['first_name']}")           
-            # ufc_api.set_args(view_args, view_path, view_dom_id)
-            test_lst = [0,1,2,3,4,5,6,7,8,9,10,11,11]
+            test_lst = [0,1,2,3,4,5,6,7,8,9,10,11]
+            total_fights = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
                 for result in executor.map(ufc_api.get_response, test_lst):
-                    # self.items['Fights'] += result.count('c-card-event--athlete-results__headline')
+                    
                     amount_fights = result.count('c-card-event--athlete-results__headline')
                     if amount_fights == 0:
                         break
-                    self.items['Fights'] += amount_fights
+                    total_fights += amount_fights
 
                     
                     # # print(result)
+                self.data["Fights"] = total_fights
                     
             
-            # fight_data = ufc_api.get_response()
+            
         except Exception as e:
             print(e)
-        # print(f"{self.items['Fights']}")
-        self.items['Fights'] = str(self.items['Fights'])
+        
+        
         
 
 
@@ -133,15 +141,14 @@ class UfcSpider(scrapy.Spider):
        
         if " " in name:
             names = name.split(" ")
-            self.items['first_name'] = names[0]
-            self.items['last_name'] = names[1]
+            self.data['first_name'] = names[0]
+            self.data['last_name'] = names[1]
         else:
-            self.items['first_name'] = name
-            self.items['last_name'] = ''
-        if division == None:
-            self.items['Division'] = 'Unknown'
-        else:
-            self.items['Division'] = division
+            self.data['first_name'] = name
+            # self.bio_data['last_name'] = ''
+        if division != None:
+            self.data['Division'] = division
+        
         
     
 
@@ -168,7 +175,9 @@ class UfcSpider(scrapy.Spider):
             new_label = new_label.replace(" ", "_")
             new_label = new_label.replace(".", "")
             new_label = new_label.replace("/","_")
-            self.items[new_label] = value
+           
+            self.data[new_label] = value
+
     
     def get_misc_stats(self, response):
         misc_values = response.css('.c-stat-3bar__value::text').extract()
@@ -182,11 +191,11 @@ class UfcSpider(scrapy.Spider):
         sig_strike_body = response.css('text#e-stat-body_x5F__x5F_body_value::text').extract_first()
         sig_strike_leg = response.css('text#e-stat-body_x5F__x5F_leg_value::text').extract_first()
         if sig_strike_head != None:
-            self.items['Sig_Str_Head'] = sig_strike_head
+            self.data['Sig_Str_Head'] = sig_strike_head
         if sig_strike_body != None:
-            self.items['Sig_Str_Body'] = sig_strike_body
+            self.data['Sig_Str_Body'] = sig_strike_body
         if sig_strike_leg != None:
-            self.items['Sig_Str_Leg'] = sig_strike_leg
+            self.data['Sig_Str_Leg'] = sig_strike_leg
 
 
 
@@ -213,10 +222,10 @@ class UfcSpider(scrapy.Spider):
         formatted_comp_list = []
         for idx,data in enumerate(cleaned_comp_list):
             if idx == 0 and not any(substring in data for substring in self.nums):
-                formatted_comp_list.append('N/A')
+                formatted_comp_list.append('')
                 formatted_comp_list.append(data)
             elif not any(substring in data for substring in self.nums) and not any(substring in cleaned_comp_list[idx-1] for substring in self.nums):
-                formatted_comp_list.append('N/A')
+                formatted_comp_list.append('')
                 formatted_comp_list.append(data)
             else:
                 formatted_comp_list.append(data)
@@ -305,6 +314,113 @@ class UfcSpider(scrapy.Spider):
         for label, val in zip(labels, values):
             res[label] = val
         return res
+
+    def create_schemas(self):
+
+        
+
+        schema_fact = StructType([ \
+        StructField("Bio ID",IntegerType(),True), \
+        StructField("Sig. Strikes Landed",StringType(),True), \
+        StructField("Sig. Strikes Attempted",StringType(),True), \
+        StructField("Sig. Strikes Landed Per Min", StringType(), True), \
+        StructField("Sig. Strikes Absorbed Per Min", StringType(), True), \
+        StructField("Sig. Strike Defense", StringType(), True), \
+        StructField("Knockdown Average",StringType(),True), \
+        StructField("Sig. Strikes Standing",StringType(),True), \
+        StructField("Sig. Strikes Clinch",StringType(),True), \
+        StructField("Sig. Strikes Ground", StringType(), True), \
+        StructField("Sig. Strikes Head", StringType(), True), \
+        StructField("Sig. Strikes Body", StringType(), True), \
+        StructField("Sig. Strikes Leg",StringType(),True), \
+        StructField("Takedowns Landed",StringType(),True), \
+        StructField("Takedowns Attempted", StringType(), True), \
+        StructField("Takedown Average", StringType(), True), \
+        StructField("Takedown Defense", StringType(), True), \
+        StructField("Submission Average", StringType(), True), \
+        StructField("KO/TKO",StringType(),True), \
+        StructField("DEC",StringType(),True), \
+        StructField("SUB", StringType(), True), \
+        StructField("Reach", StringType(), True), \
+        StructField("Leg Reach", StringType(), True), \
+        StructField("Age", StringType(), True), \
+        StructField("Height", StringType(), True), \
+        StructField("Average Fight Time", StringType(), True), \
+        StructField("Number of Fights", IntegerType(), True) \
+            ])     
+
+        schema_bio = StructType([ \
+        StructField("Bio ID",IntegerType(),True), \
+        StructField("First Name",StringType(),True), \
+        StructField("Last Name",StringType(),True), \
+        StructField("Division", StringType(), True), \
+        StructField("Status", StringType(), True), \
+        StructField("Hometown", StringType(), True), \
+        StructField("Fighting Style",StringType(),True), \
+        StructField("Trains At",StringType(),True), \
+        StructField("Octagon Debut",StringType(),True) \
+            ])
+
+        return schema_fact, schema_bio
+    
+    def reset_data(self):
+    
+        data = {
+            "Bio_ID": self.current_id,
+            "first_name":"",
+            "last_name":"",
+            "Division":"",
+            "Status":"",
+            "Place_of_Birth":"",
+            "Fighting_style":"",
+            "Trains_at":"",
+            "Octagon_Debut":"",
+
+            "Sig_Strikes_Landed": "",
+            "Sig_Strikes_Attempted":"",
+            "Sig_Str_Landed": "",
+            "Sig_Str_Absorbed": "",
+            "Sig_Str_Defense": "",
+            "Knockdown_Avg": "",
+            "Standing":"",
+            "Clinch":"",
+            "Ground":"",
+            "Sig_Str_Head":"",
+            "Sig_Str_Body":"",
+            "Sig_Str_Leg":"",
+            "Takedowns_Landed":"",
+            "Takedowns_Attempted":"",
+            "Takedown_avg":"",
+            "Takedown_Defense":"",
+            "Submission_avg":"",
+            "KO_TKO":"",
+            "DEC":"",
+            "SUB":"",
+            "Reach":"",
+            "Leg_reach":"",
+            "Age":"",
+            "Height":"",
+            "Average_fight_time":"",
+            "Fights":0
+        }
+        self.current_id += 1
+
+       
+
+
+        return data
+
+    def seperate_tables(self, data):
+        bio_data = dict(itertools.islice(data.items(), 0, 9))
+        length = len(data.items())
+        fact_data = dict(itertools.islice(data.items(), 9, length))
+        fact_data["Bio_ID"] = bio_data["Bio_ID"]
+        
+        return bio_data, fact_data
+
+
+
+        
     
     
 
