@@ -145,7 +145,6 @@ class UfcSpider(scrapy.Spider):
             self.data['last_name'] = names[1]
         else:
             self.data['first_name'] = name
-            # self.bio_data['last_name'] = ''
         if division != None:
             self.data['Division'] = division
         
@@ -163,8 +162,28 @@ class UfcSpider(scrapy.Spider):
 
     
     def get_accuracy_stats(self, response):
-        accuracy = response.css('.c-overlap__stats-text::text , .c-overlap__stats-value::text').extract()
-        accuracy_dict = self.clean_accuracy_list(accuracy)
+        sig_strikes_landed = response.css('.stats-records--one-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-value , .stats-records--one-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-text::text').extract()
+        sig_strikes_attempted = response.css('.stats-records--one-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-value , .stats-records--one-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-text::text').extract()
+        takedowns_landed = response.css('.stats-records--two-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-value , .stats-records--two-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-text::text').extract()
+        takedowns_attempted = response.css('.stats-records--two-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-value , .stats-records--two-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-text::text').extract()
+        
+        accuracy_list = [sig_strikes_landed, sig_strikes_attempted, takedowns_landed, takedowns_attempted]
+
+        for data_list in accuracy_list:
+            if len(data_list) == 0:
+                print("Error: Accuracy list contains no values")
+            elif len(data_list) == 1:
+                data_list.append("0")
+        
+        accuracy_dict = {
+            accuracy_list[0][0]:accuracy_list[0][1],
+            accuracy_list[0][1]:accuracy_list[1][1],
+            accuracy_list[0][2]:accuracy_list[2][1],
+            accuracy_list[0][3]:accuracy_list[3][1],
+        }
+
+        
+        
         self.add_items(accuracy_dict)
         
         
@@ -240,34 +259,44 @@ class UfcSpider(scrapy.Spider):
         
 
     
-    def clean_accuracy_list(self, accuracy_list):
-        #If the next value is not a number, and the current is not a number, add a 0
-        new_list = []
-        for i, info in enumerate(accuracy_list):
-            curr_value = info
-            next_value = "false"  
-            try:
-                curr_value = int(info)
-            except:
-                pass
-            try:
-                next_value = int(accuracy_list[i+1])
-            except IndexError:
-                new_list.append(info)
-                break
-            except:
-                pass
+    # def clean_accuracy_list(self, accuracy_list):
+    #     #If the next value is not a number, and the current is not a number, add a 0
+    #     # new_list = []
+    #     # for i, info in enumerate(accuracy_list):
+    #     #     curr_value = info
+    #     #     next_value = "false"  
+    #     #     try:
+    #     #         curr_value = int(info)
+    #     #     except:
+    #     #         pass
+    #     #     try:
+    #     #         next_value = int(accuracy_list[i+1])
+    #     #     except IndexError:
+    #     #         new_list.append(info)
+    #     #         break
+    #     #     except:
+    #     #         pass
         
-            if (not isinstance(next_value, int)) and (not isinstance(curr_value, int)):
-                new_list.append(info)
-                new_list.append('0')
-            else:
-                new_list.append(info)
+    #     #     if (not isinstance(next_value, int)) and (not isinstance(curr_value, int)):
+    #     #         new_list.append(info)
+    #     #         new_list.append('0')
+    #     #     else:
+    #     #         new_list.append(info)
+
+    #     response.css('.stats-records--one-column+ .stats-records--two-column .c-overlap__stats:nth-child(1)::text')
+    #     .stats-records--one-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-value , .stats-records--one-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-text
+    #     .stats-records--one-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-value , .stats-records--one-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-text
+
+            
+            
+            
+            
+
             
 
         
        
-        return self.list_to_dict(new_list)
+    #     return self.list_to_dict(new_list)
     
 
     def list_to_dict(self, data):
@@ -388,7 +417,7 @@ class UfcSpider(scrapy.Spider):
             "Sig_Str_Head":"",
             "Sig_Str_Body":"",
             "Sig_Str_Leg":"",
-            "Takedowns_Landed":"",
+            "Takedowns_Landed":"0",
             "Takedowns_Attempted":"",
             "Takedown_avg":"",
             "Takedown_Defense":"",
