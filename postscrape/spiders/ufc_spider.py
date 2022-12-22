@@ -1,15 +1,23 @@
 import scrapy
-from .. items import PostscrapeItem
-from . UfcDataCleaner import UfcDataCleaner as clean
-from . UfcPipeline import UfcPipeline as pipeline
-from . UfcAPI import UfcAPI as api
+
+from .UfcDataCleaner import UfcDataCleaner as clean
+from .UfcPipeline import UfcPipeline as pipeline
+from .UfcAPI import UfcAPI as api
 import json
 import concurrent.futures
 import logging
 from pyspark.sql.types import StructType,StructField, StringType, IntegerType
 from pyspark.sql import SparkSession
 import itertools
+import time
 
+
+#TASKS:
+#VERIFY THE DATA
+#SEE IF POSSIBLE TO MAKE REQUESTS MORE EFFICIENT 
+#ADD FILTER TO FILTER OUT BAD DATA
+#SEND TO CSV FILE AT THE END OF RUN TIME
+#COMMENT AND CLEAN UP CODE/VARIABLE NAMES
 
 
 class UfcSpider(scrapy.Spider):
@@ -18,6 +26,8 @@ class UfcSpider(scrapy.Spider):
     
     def __init__(self, name=None, **kwargs):
         
+        self.time = 0
+        self.kill = False
         self.current_id = 0
         self.data = self.reset_data()
         self.nums = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9' ]
@@ -42,6 +52,8 @@ class UfcSpider(scrapy.Spider):
         
         self.df_fact = self.spark.createDataFrame([],schema=schema_fact)
         self.df_bio = self.spark.createDataFrame([], schema=schema_bio)
+
+        self.count = 0
         
         
      
@@ -74,61 +86,99 @@ class UfcSpider(scrapy.Spider):
 
     def parse_athlete(self, response):
         self.get_basic_info(response)
-        self.get_accuracy_stats(response)
-        self.get_base_stats(response)
-        self.get_misc_stats(response)
-        self.get_target_stats(response)
-        self.get_bio(response)
-        self.parse_fights(response)
-        bio_data, fact_data = self.seperate_tables(self.data)
-        clean_fact = self.cleaner.clean_data(fact_data)
-        clean_bio = self.cleaner.clean_data(bio_data)
-        new_row_fact = self.spark.createDataFrame([clean_fact], self.fact_heading)
-        new_row_bio = self.spark.createDataFrame([clean_bio], self.bio_heading)
+        validation1 = self.get_accuracy_stats(response)
+        validation2 = self.get_base_stats(response)
+        
+        if validation1 and validation2:
+            
+            self.get_misc_stats(response)
+            self.get_target_stats(response)
+            self.get_bio(response)
+            startTime = time.time()
+            self.parse_fights(response)
+            endTime = time.time()
+            self.time += (endTime -startTime)
+            print(f"Total time: {self.time}")
+            
+            bio_data, fact_data = self.seperate_tables(self.data)
+            clean_fact = self.cleaner.clean_data(fact_data)
+            clean_bio = self.cleaner.clean_data(bio_data)
 
-        self.df_fact = self.df_fact.union(new_row_fact)
-        self.df_bio = self.df_bio.union(new_row_bio)
+            
+
+            new_row_fact = self.spark.createDataFrame([clean_fact], self.fact_heading)
+            new_row_bio = self.spark.createDataFrame([clean_bio], self.bio_heading)
+
+            self.df_fact = self.df_fact.union(new_row_fact)
+            self.df_bio = self.df_bio.union(new_row_bio)
+            self.current_id += 1
+            # self.df_fact.show(vertical=True)
+            # self.df_bio.show(vertical=True)
+        
+
         self.data = self.reset_data()
 
-        self.df_fact.show(vertical=True)
-        self.df_bio.show(vertical=True)
+        # self.df_fact.show(vertical=True)
+        # self.df_bio.show(vertical=True)
         # self.pipeline.send_to_csv(clean_dict)
         
     def parse_fights(self, response):
-        script_text = response.xpath('/html/head/script[@data-drupal-selector]//text()').extract_first()
-        script = json.loads(script_text)
-        pretty = json.dumps(script, indent=4)
-        threads = 12
+        # script_text = response.xpath('/html/head/script[@data-drupal-selector]//text()').extract_first()
+        button = response.css('.button').extract()
+        url = response.request.url
+        # print(f"Current url: {url}")
+        # script = json.loads(script_text)
+        # pretty = json.dumps(script, indent=4)
+        # threads = 12
+        self.count +=1
         
-
-
-        try:
-            dom_key = list(script['views']['ajaxViews'].keys())[0]
-            ajax = script['views']['ajaxViews'][dom_key]
-            view_args = ajax['view_args']
-            view_path = ajax['view_path']
-            view_dom_id = ajax['view_dom_id']
-           
-            ufc_api = api(view_args, view_path, view_dom_id)
+        
+        if len(button) == 0:
+            fights = response.css(".c-card-event--athlete-results__headline").extract()
+            self.data["Fights"] = len(fights)
+        else:
+            try:
+                # dom_key = list(script['views']['ajaxViews'].keys())[0]
+                # ajax = script['views']['ajaxViews'][dom_key]
+                # view_args = ajax['view_args']
+                # view_path = ajax['view_path']
+                # view_dom_id = ajax['view_dom_id']
             
-            test_lst = [0,1,2,3,4,5,6,7,8,9,10,11]
-            total_fights = 0
-            with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
-                for result in executor.map(ufc_api.get_response, test_lst):
-                    
-                    amount_fights = result.count('c-card-event--athlete-results__headline')
-                    if amount_fights == 0:
-                        break
-                    total_fights += amount_fights
+                # ufc_api = api(view_args, view_path, view_dom_id)
+                ufc_api = api(url)
 
+
+                
+                
+                test_lst = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
+            
+                total_fights = 0
+                with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                    for result in executor.map(ufc_api.get_responsev3, test_lst):
+                        if self.kill:
+                            
+                            break
+                        amount_fights = result
+                        total_fights += amount_fights
+                        if amount_fights == 0:
+                            self.kill = True
+                            
+
+                        
                     
-                    # # print(result)
+                        
+
+                        
+                        # # print(result)
+                
+                self.kill = False
                 self.data["Fights"] = total_fights
                     
-            
-            
-        except Exception as e:
-            print(e)
+                
+                
+                
+            except Exception as e:
+                print(e)
         
         
         
@@ -162,39 +212,67 @@ class UfcSpider(scrapy.Spider):
 
     
     def get_accuracy_stats(self, response):
-        sig_strikes_landed = response.css('.stats-records--one-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-value , .stats-records--one-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-text::text').extract()
-        sig_strikes_attempted = response.css('.stats-records--one-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-value , .stats-records--one-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-text::text').extract()
-        takedowns_landed = response.css('.stats-records--two-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-value , .stats-records--two-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-text::text').extract()
-        takedowns_attempted = response.css('.stats-records--two-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-value , .stats-records--two-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-text::text').extract()
-        
-        accuracy_list = [sig_strikes_landed, sig_strikes_attempted, takedowns_landed, takedowns_attempted]
-
-        for data_list in accuracy_list:
-            if len(data_list) == 0:
-                print("Error: Accuracy list contains no values")
-            elif len(data_list) == 1:
-                data_list.append("0")
-        
-        accuracy_dict = {
-            accuracy_list[0][0]:accuracy_list[0][1],
-            accuracy_list[0][1]:accuracy_list[1][1],
-            accuracy_list[0][2]:accuracy_list[2][1],
-            accuracy_list[0][3]:accuracy_list[3][1],
-        }
-
-        
-        
-        self.add_items(accuracy_dict)
-        
+        accuracy_list = response.css(".c-overlap__stats-value::text , .c-overlap__stats-text::text").extract()
+        percent_list = response.css("text.e-chart-circle__percent::text").extract()
+        if len(percent_list) != 2:
+            return False
         
 
-    def add_items(self, dict):
+        percent = percent_list[1]
+        percent = percent.replace("%", "")
+        takedowns_percent = int(percent) / 100
+        if len(accuracy_list) != 8:
+           accuracy_list = self.fix_response_lists(accuracy_list)
+           
+
+        accuracy_dict = self.list_to_dict(accuracy_list)
+        
+
+        if accuracy_dict["Takedowns Landed"] == "":
+            accuracy_dict["Takedowns Landed"] = round(takedowns_percent * int(accuracy_dict["Takedowns Attempted"]))
+            
+
+        
+        self.add_items(accuracy_dict, "accuracy stats")
+        return True
+        
+    def fix_response_lists(self, lst):
+        updated_list = []
+        final = ""
+        for curr, next in self.pairwise(lst):
+
+            final = next
+            temp_next = next.replace(" ", "")
+            temp_curr = curr.replace(" ", "")
+            next_alpha = temp_next.isalpha()
+            curr_alpha = temp_curr.isalpha()
+
+            if next_alpha and curr_alpha:
+                updated_list.append(curr)
+                updated_list.append("")
+            else:
+                updated_list.append(curr)
+                
+        updated_list.append(final)
+        if(final.isalpha()):
+            updated_list.append("0")
+
+        return updated_list
+
+    def pairwise(self, iterable):
+        a,b = itertools.tee(iterable)
+        next(b,None)
+        return zip(a,b)
+    
+    def add_items(self, dict, func):
+        # print(f"From Function: {func}")
+        # print(f"Current Dictionary: {dict}")
         for label, value in dict.items():
             new_label = label.strip()
             new_label = new_label.replace(" ", "_")
             new_label = new_label.replace(".", "")
             new_label = new_label.replace("/","_")
-           
+            # print(f"New Label being added: {new_label}")
             self.data[new_label] = value
 
     
@@ -203,7 +281,7 @@ class UfcSpider(scrapy.Spider):
         misc_labels = response.css('.c-stat-3bar__label::text').extract()
 
         misc_dict = self.lists_to_dict(misc_labels, misc_values)
-        self.add_items(misc_dict)
+        self.add_items(misc_dict, "misc stats")
     
     def get_target_stats(self, response):
         sig_strike_head = response.css('text#e-stat-body_x5F__x5F_head_value::text').extract_first()
@@ -227,81 +305,69 @@ class UfcSpider(scrapy.Spider):
 
 
     def get_base_stats(self,response):
-        name = str(response.css('.hero-profile__name::text').extract_first())
-        comparison_values = response.css('.c-stat-compare__number::text').extract()
-        comparison_labels = response.css('.c-stat-compare__label::text').extract()
-        comparison_list = response.xpath('//*[contains(concat( " ", @class, " " ), concat( " ", "c-stat-compare__group", " " ))]//text()').extract()
-        cleaned_comp_list = []
+       
+        # comparison_list = response.xpath('//*[contains(concat( " ", @class, " " ), concat( " ", "c-stat-compare__group", " " ))]//text()').extract()
+        comparison_list = response.css(".c-stat-compare__label::text , .c-stat-compare__number::text").extract()
+        
+        
+
+        cleaned = []
         for data in comparison_list:
             clean_data = data.strip()
-            if clean_data != '' and clean_data != 'Per Min' and clean_data != 'Per 15 Min' and clean_data != '%':
-                cleaned_comp_list.append(clean_data)
-        
-        
-        formatted_comp_list = []
-        for idx,data in enumerate(cleaned_comp_list):
-            if idx == 0 and not any(substring in data for substring in self.nums):
-                formatted_comp_list.append('')
-                formatted_comp_list.append(data)
-            elif not any(substring in data for substring in self.nums) and not any(substring in cleaned_comp_list[idx-1] for substring in self.nums):
-                formatted_comp_list.append('')
-                formatted_comp_list.append(data)
-            else:
-                formatted_comp_list.append(data)
-            
-
-        for idx in range(0, len(formatted_comp_list) - 1, 2):
-
-            formatted_comp_list[idx], formatted_comp_list[idx+1] = formatted_comp_list[idx+1], formatted_comp_list[idx]
-        
-        comp_dict = self.list_to_dict(formatted_comp_list)
-        self.add_items(comp_dict)
-        
-
-    
-    # def clean_accuracy_list(self, accuracy_list):
-    #     #If the next value is not a number, and the current is not a number, add a 0
-    #     # new_list = []
-    #     # for i, info in enumerate(accuracy_list):
-    #     #     curr_value = info
-    #     #     next_value = "false"  
-    #     #     try:
-    #     #         curr_value = int(info)
-    #     #     except:
-    #     #         pass
-    #     #     try:
-    #     #         next_value = int(accuracy_list[i+1])
-    #     #     except IndexError:
-    #     #         new_list.append(info)
-    #     #         break
-    #     #     except:
-    #     #         pass
-        
-    #     #     if (not isinstance(next_value, int)) and (not isinstance(curr_value, int)):
-    #     #         new_list.append(info)
-    #     #         new_list.append('0')
-    #     #     else:
-    #     #         new_list.append(info)
-
-    #     response.css('.stats-records--one-column+ .stats-records--two-column .c-overlap__stats:nth-child(1)::text')
-    #     .stats-records--one-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-value , .stats-records--one-column+ .stats-records--two-column .c-overlap__stats:nth-child(1) .c-overlap__stats-text
-    #     .stats-records--one-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-value , .stats-records--one-column+ .stats-records--two-column .c-overlap__stats+ .c-overlap__stats .c-overlap__stats-text
-
-            
-            
-            
-            
-
-            
-
+            cleaned.append(clean_data)
+            # if clean_data != '' and clean_data != 'Per Min' and clean_data != 'Per 15 Min' and clean_data != '%':
+            #     cleaned_comp_list.append(clean_data)
         
        
-    #     return self.list_to_dict(new_list)
-    
+
+        if len(cleaned) == 15:
+            cleaned = self.fix_base_lists(cleaned)
+
+                           
+        if len(cleaned) == 16:
+            cleaned = self.swap(cleaned)
+            comp_dict = self.list_to_dict(cleaned)
+            self.add_items(comp_dict, "base stats")
+            return True
+        else:
+            return False
+        
+       
+        
+    def fix_base_lists(self, cleaned):
+        updated_list = []
+        final = ""
+        for i in range(0, len(cleaned) - 1):
+            final = cleaned[i+1]
+            temp_curr = cleaned[i].replace(" ", "")
+            temp_curr = temp_curr.replace(".", "")
+            temp_next = cleaned[i+1].replace(" ", "")
+            temp_next = temp_next.replace(".", "")
+           
+
+            if temp_curr.isalpha() and temp_next.isalpha():
+                if temp_next == "TakedownDefense":
+                    updated_list.append(cleaned[i])
+                    updated_list.append("")
+                else:
+                    updated_list.append(cleaned[i])
+            else:
+                updated_list.append(cleaned[i])
+         
+        updated_list.append(final)
+
+        return updated_list
+
+    def swap(self, lst):
+        for i in range(0, len(lst) - 1, 2):
+            lst[i], lst[i + 1] = lst[i + 1], lst[i]
+        return lst
 
     def list_to_dict(self, data):
+    
         value = iter(data)
         res_dct = dict(zip(value, value))
+        
         return res_dct
 
 
@@ -322,7 +388,7 @@ class UfcSpider(scrapy.Spider):
         bio_dict = self.lists_to_dict(bio_labels, bio_values)
        
         
-        self.add_items(bio_dict)
+        self.add_items(bio_dict, "bio")
         
         
 
@@ -417,7 +483,7 @@ class UfcSpider(scrapy.Spider):
             "Sig_Str_Head":"",
             "Sig_Str_Body":"",
             "Sig_Str_Leg":"",
-            "Takedowns_Landed":"0",
+            "Takedowns_Landed":"",
             "Takedowns_Attempted":"",
             "Takedown_avg":"",
             "Takedown_Defense":"",
@@ -432,7 +498,7 @@ class UfcSpider(scrapy.Spider):
             "Average_fight_time":"",
             "Fights":0
         }
-        self.current_id += 1
+        
 
        
 
@@ -449,8 +515,8 @@ class UfcSpider(scrapy.Spider):
 
 
 
-        
-    
+
+
     
 
             

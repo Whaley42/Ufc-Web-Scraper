@@ -1,39 +1,25 @@
 import requests
 import json
 import sys
-
+import asyncio
+from bs4 import BeautifulSoup
 
 url = 'https://www.ufc.com/views/ajax?_wrapper_format=drupal_ajax'
 
 class UfcAPI:
-    # def __init__(self, args, path, dom_id) -> None:
-        
-    #     self.headers = {
-    #         'authority': 'www.ufc.com',
-    #         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
-    #         'x-requested-with': 'XMLHttpRequest'
-    #     }
 
-    #     self.data = {
-    #         'view_name': 'athlete_results',
-    #         'view_display_id': 'entity_view_1', 
-    #         'view_args': args,
-    #         'view_path': path,
-    #         'view_dom_id': dom_id,
-    #         'pager_element': 0,
-    #         'page': 0,
-    #         '_drupal_ajax': 1,
-    #     }
 
-    def __init__(self, args, path, dom_id) -> None:
-        self.view_args = args
-        self.view_path = path
-        self.view_dom_id = dom_id
-        self.headers = {
-            'authority': 'www.ufc.com',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
-            'x-requested-with': 'XMLHttpRequest'
-        }
+    def __init__(self, url) -> None:
+        # self.view_args = args
+        # self.view_path = path
+        # self.view_dom_id = dom_id
+        # self.headers = {
+        #     'authority': 'www.ufc.com',
+        #     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
+        #     'x-requested-with': 'XMLHttpRequest'
+        #}
+        self.url = url
+        self.end = False
 
     # def set_args(self, args_in, path_in, dom_id_in):
     #     UfcAPI.data['view_args'] = args_in
@@ -62,7 +48,42 @@ class UfcAPI:
         
         
         return ajax_data
+    
+    def get_responsev3(self, page):
+        if self.end:
+            return 0
+        else:
+            curr_url = self.url + "?page=" + str(page)
+            response = requests.get(curr_url)
+            soup = BeautifulSoup(response.text, "html.parser")
+            total_fights = soup.find_all(class_='c-card-event--athlete-results__results')
+            # headlines = soup.find_all(class_='c-card-event--athlete-results__headline')
+            # wins = soup.select('.c-card-event--athlete-results__blue-image :nth-child(1)')
 
+
+            
+            # for headline in headlines:
+            #     print(headline.get_text().strip())
+            
+            # for win in wins:
+            #     print("------------")
+            #     print(win)
+            #     print("------------")
+            # updated_list = []
+
+            # for win in wins:
+            #     if 
+            # print(wins)
+            
+            # print(f"Current url: {curr_url}")
+            # print(f"Total fights on page: {total_fights}")
+            return len(total_fights)
+        
+    
+   
+
+    def stop(self):
+        self.end = True
 
     def get_responsev2(self):
         response = requests.post(url=url, data=self.data,headers=self.headers)
@@ -72,7 +93,10 @@ class UfcAPI:
         
         
         return ajax_data
+    
 
+    async def start(self):
+        await self.get_responsev3()
 
     def next_page(self):
         self.data['page'] += 1
@@ -97,3 +121,10 @@ class UfcAPI:
     # # print(u"{0}".format(text))
     # def print_utf(text):
     #     print(text.encode(sys.stdout.encoding, UnicodeDecodeError='replace'))
+
+
+    if __name__ == '__main__':
+        
+        asyncio.run(get_responsev3)
+        
+        # time taken: 14.692326207994483
