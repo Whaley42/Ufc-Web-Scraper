@@ -142,7 +142,7 @@ class Helper:
     def create_schemas(self):
 
         schema_fact = StructType([ \
-        StructField("Bio ID",IntegerType(),True), \
+        StructField("ID",IntegerType(),True), \
         StructField("Sig. Strikes Landed",StringType(),True), \
         StructField("Sig. Strikes Attempted",StringType(),True), \
         StructField("Sig. Strikes Landed Per Min", StringType(), True), \
@@ -168,20 +168,20 @@ class Helper:
         StructField("Age", StringType(), True), \
         StructField("Height", StringType(), True), \
         StructField("Average Fight Time", StringType(), True), \
-        StructField("Number of Fights", IntegerType(), True), \
+        StructField("Number_of_Fights", IntegerType(), True), \
         StructField("Wins", IntegerType(), True) \
             ])     
 
         schema_bio = StructType([ \
-        StructField("Bio ID",IntegerType(),True), \
-        StructField("First Name",StringType(),True), \
-        StructField("Last Name",StringType(),True), \
+        StructField("ID",IntegerType(),True), \
+        StructField("First_Name",StringType(),True), \
+        StructField("Last_Name",StringType(),True), \
         StructField("Division", StringType(), True), \
         StructField("Status", StringType(), True), \
         StructField("Hometown", StringType(), True), \
-        StructField("Fighting Style",StringType(),True), \
-        StructField("Trains At",StringType(),True), \
-        StructField("Octagon Debut",StringType(),True) \
+        StructField("Fighting_Style",StringType(),True), \
+        StructField("Trains_At",StringType(),True), \
+        StructField("Octagon_Debut",StringType(),True) \
             ])
 
         return schema_fact, schema_bio

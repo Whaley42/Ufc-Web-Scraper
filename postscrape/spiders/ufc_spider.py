@@ -1,5 +1,5 @@
 import scrapy
-
+import atexit
 from .UfcDataCleaner import UfcDataCleaner as clean
 from .UfcPipeline import UfcPipeline as pipeline
 from .UfcConnector import Connector as conn
@@ -8,6 +8,7 @@ import concurrent.futures
 import logging
 from pyspark.sql import SparkSession
 import time
+
 
 
 #TASKS:
@@ -21,6 +22,9 @@ import time
 class UfcSpider(scrapy.Spider):
     name = 'ufc'
     start_urls = ['https://www.ufc.com/athletes/all?gender=All&search=&page=0']
+
+    def exit_handler(self):
+        self.pipeline.send_to_csv(self.df_fact, self.df_bio)  
     
     def __init__(self, name=None, **kwargs):
         
@@ -51,9 +55,12 @@ class UfcSpider(scrapy.Spider):
         self.df_bio = self.spark.createDataFrame([], schema=schema_bio)
 
         self.count = 0
+        atexit.register(self.exit_handler)
+        
         
 
     def parse(self, response):
+        
         athletes = response.css('.c-listing-athlete-flipcard__back')
         
         for athlete in athletes:
@@ -61,6 +68,7 @@ class UfcSpider(scrapy.Spider):
             link =  athlete.css('a::attr(href)').get()
             
             yield response.follow(url=link, callback=self.parse_athlete)
+        
         
         # self.next_page_num += 1
         
@@ -96,8 +104,8 @@ class UfcSpider(scrapy.Spider):
             self.df_fact = self.df_fact.union(new_row_fact)
             self.df_bio = self.df_bio.union(new_row_bio)
             self.helper.increment_id()
-            self.df_fact.show(vertical=True)
-            self.df_bio.show(vertical=True)
+            # self.df_fact.show(vertical=True)
+            # self.df_bio.show(vertical=True)
         
         self.data = self.helper.reset_data()
         # self.df_fact.show(vertical=True)
@@ -247,7 +255,8 @@ class UfcSpider(scrapy.Spider):
        
         
         self.add_items(bio_dict, "bio")
-        
+
+          
     
 
 
