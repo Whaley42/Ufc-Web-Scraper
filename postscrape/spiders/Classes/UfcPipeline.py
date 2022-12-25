@@ -7,10 +7,8 @@ class UfcPipeline:
     def send_to_csv(self, fact_df, bio_df):
         fact_df, bio_df = self.filter(fact_df, bio_df)
 
-        # fact_df.show(vertical=True)
-        # bio_df.show(vertical=True)
-        display(fact_df.toPandas())
-        display(bio_df.toPandas())
+        # display(fact_df.toPandas())
+        # display(bio_df.toPandas())
         fact_df.toPandas().to_csv("fact.csv", index=False)
         bio_df.toPandas().to_csv("bio.csv", index=False)
 
