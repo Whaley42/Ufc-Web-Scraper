@@ -2,255 +2,261 @@ import scrapy
 import atexit
 from .UfcDataCleaner import UfcDataCleaner as clean
 from .UfcPipeline import UfcPipeline as pipeline
-from .UfcConnector import Connector as conn
 from .Helper import Helper
-import concurrent.futures
-import logging
-from pyspark.sql import SparkSession
 import time
-
-
-
-#TASKS:
-#COMMENT AND CLEAN UP CODE/VARIABLE NAMES
 
 
 class UfcSpider(scrapy.Spider):
     name = 'ufc'
     start_urls = ['https://www.ufc.com/athletes/all?gender=All&search=&page=0']
 
+
     def exit_handler(self):
-        self.pipeline.send_to_csv(self.df_fact, self.df_bio)  
+
+        end_time = time.time()
+        print(f"Final time: {end_time - self.time_start}")
+        self.pipeline.send_to_csv(self.fighters) 
+         
     
     def __init__(self, name=None, **kwargs):
         
-        self.time = 0
-        self.kill = False
+        self.time_start = time.time()
         self.cleaner = clean()
         self.pipeline = pipeline()
         self.helper = Helper()
-        self.data = self.helper.reset_data()
         self.base_url = "https://www.ufc.com/athletes/all?gender=All&search=&page="
         self.next_page_num = 0
         self.next_page = self.base_url + str(self.next_page_num)
         self.current_page = 0
-        self.api = ''
-
-        logging.getLogger("py4j").setLevel(logging.INFO)
-        self.fact_heading = ["Bio ID", "Sig. Strikes Landed", "Sig. Strikes Attempted", "Sig. Strikes Landed Per Min", "Sig. Strikes Absorbed Per Min"
-                            ,"Sig. Strike Defense", "Knockdown Average", "Sig. Strikes Standing", "Sig. Strikes Clinch", "Sig. Strikes Ground", "Sig. Strikes Head"
-                            ,"Sig. Strikes Body", "Sig. Strikes Leg", "Takedowns Landed", "Takedowns Attempted", "Takedown Average", "Takedown Defense", "Submission Average"
-                            ,"KO/TKO","DEC","SUB","Reach","Leg Reach", "Average Fight Time","Age", "Height","Number of Fights"]
-        
-        self.bio_heading = ["Bio ID", "First Name", "Last Name", "Division", "Status", "Hometown", "Fighting Style", "Trains At", "Octagon Debut"]
-
-        schema_fact, schema_bio = self.helper.create_schemas()
-        self.spark = SparkSession.builder.appName('ufc').getOrCreate()
-        
-        self.df_fact = self.spark.createDataFrame([],schema=schema_fact)
-        self.df_bio = self.spark.createDataFrame([], schema=schema_bio)
-
-        self.count = 0
+       
+        self.fighters = {}
         atexit.register(self.exit_handler)
         
         
-
     def parse(self, response):
+        """Parses through all fighter links on the current page.
+           Continutes to next page until there are no more fighters
+
+        Args:
+            response: response to the web page.
+        """
         
         athletes = response.css('.c-listing-athlete-flipcard__back')
         
         for athlete in athletes:
-                
+            base_url = "https://www.ufc.com"
             link =  athlete.css('a::attr(href)').get()
-            
-            yield response.follow(url=link, callback=self.parse_athlete)
+            athlete_link = base_url + link + "?page=0"
+             
+            yield scrapy.Request(url=athlete_link, callback=self.parse_athlete, priority=1)
+                
+        self.next_page_num += 1
         
-        
-        # self.next_page_num += 1
-        
-        # if len(athletes) != 0:
-        #     self.current_page += 1
-        #     self.next_page = self.base_url + str(self.next_page_num)
-        #     yield response.follow(url=self.next_page, callback=self.parse)
-
-        
+        if len(athletes) != 0:
+            self.current_page += 1
+            self.next_page = self.base_url + str(self.next_page_num)
+            yield response.follow(url=self.next_page, callback=self.parse)
+      
 
     def parse_athlete(self, response):
-        self.get_basic_info(response)
-        validation1 = self.get_accuracy_stats(response)
-        validation2 = self.get_base_stats(response)
+        """Creates a key for each fighter that will be stored in python dictionary. 
+            Goes through the fighter's pages to calculate total ufc fights and wins.
+            Finally, scrapes figher information.
+
+        Args:
+            response: response to the current page.
+        """
         
-        if validation1 and validation2:    
-            self.get_misc_stats(response)
-            self.get_target_stats(response)
-            self.get_bio(response)
-            startTime = time.time()
-            self.parse_fights(response)
-            endTime = time.time()
-            self.time += (endTime -startTime)
-            print(f"Total time: {self.time}")
+        url_list = response.request.url.split("/")
+        part_id = url_list[len(url_list) -1]
+        unique_key = part_id.split("?")[0]
+        
+        if not unique_key in self.fighters:
+            self.fighters[unique_key] = self.helper.reset_data()
+            self.fighters[unique_key]["Page"] = 0
+            self.fighters[unique_key]["Weight"] = ''
+        
+            names = str(response.css('.hero-profile__name::text').extract_first())
             
-            bio_data, fact_data = self.helper.seperate_tables(self.data)
-            clean_fact = self.cleaner.clean_data(fact_data)
-            clean_bio = self.cleaner.clean_data(bio_data)
-
-            new_row_fact = self.spark.createDataFrame([clean_fact], self.fact_heading)
-            new_row_bio = self.spark.createDataFrame([clean_bio], self.bio_heading)
-
-            self.df_fact = self.df_fact.union(new_row_fact)
-            self.df_bio = self.df_bio.union(new_row_bio)
-            self.helper.increment_id()
-            # self.df_fact.show(vertical=True)
-            # self.df_bio.show(vertical=True)
+            if " " in names:
+                name = names.split(" ")
+                if name[1].isalpha():
+                    self.fighters[unique_key]["fight_name"] = name[1]
+                else:
+                    self.fighters[unique_key]["fight_name"] = name[0]
+                    name = name[0]
+            else:
+                self.fighters[unique_key]["fight_name"] = names
+                
         
-        self.data = self.helper.reset_data()
-        # self.df_fact.show(vertical=True)
-        # self.df_bio.show(vertical=True)
-        # self.pipeline.send_to_csv(clean_dict)
-        
-    def parse_fights(self, response):
+        curr_url = response.request.url
         button = response.css('.button').extract()
-        url = response.request.url
-        self.count +=1
-
-        name = ""
-        if not self.data["last_name"]:
-            name = self.data["first_name"]
+        fights, wins = self.helper.fight_stats(response, self.fighters[unique_key]["fight_name"])
+        self.fighters[unique_key]["Fights"] += fights
+        self.fighters[unique_key]["Wins"] += wins
+        
+        if button:
+            base_url = curr_url.split("=")[0]
+            self.fighters[unique_key]["Page"] += 1
+            next_url = base_url + "=" + str(self.fighters[unique_key]["Page"])
+            yield scrapy.Request(url=next_url, callback=self.parse_athlete)
         else:
-            name = self.data["last_name"]
-
-
-        total_fights = 0
-        total_wins = 0
-        if len(button) == 0:
-            # print(f"Spider Response {response.text}")
-            total_fights, total_wins = self.helper.fight_stats(response, name)
-        else:
-            connection = conn(url, name)
-            test_lst = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]      
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                for result in executor.map(connection.get_response, test_lst):
-                    if self.kill:
-                        break
-                    amount_fights, amount_wins = result
-                    total_fights += amount_fights
-                    total_wins += amount_wins
-                    if amount_fights == 0:
-                        self.kill = True
+    
+            self.get_basic_info(response, unique_key)
+            self.get_accuracy_stats(response, unique_key)
+            self.get_base_stats(response, unique_key)         
+            self.get_area_stats(response, unique_key)
+            self.get_target_stats(response, unique_key)
+            self.get_bio(response, unique_key)
             
-            self.kill = False
-        self.data["Fights"] = total_fights
-        self.data["Wins"] = total_wins
-        
-        
-    def get_basic_info(self, response):
+            self.fighters[unique_key]= self.cleaner.clean_data(self.fighters[unique_key])
+            
+            
+    def get_basic_info(self, response, id):
+        """Add name and division to the fighter dictionary.
+
+        Args:
+            response: Response to the current page.
+            id string: Unique id for the fighter
+        """
         name = str(response.css('.hero-profile__name::text').extract_first())
         division = response.css('.hero-profile__division-title::text').extract_first()
        
         if " " in name:
             names = name.split(" ")
-            self.data['first_name'] = names[0]
-            self.data['last_name'] = names[1]
+            self.fighters[id]['first_name'] = names[0]
+            self.fighters[id]['last_name'] = names[1]
         else:
-            self.data['first_name'] = name
+            self.fighters[id]['first_name'] = name
+            
         if division != None:
-            self.data['Division'] = division
+            division = division.split(" Division")[0]
+            self.fighters[id]['Division'] = division
         
-    
-    def get_accuracy_stats(self, response):
+        
+    def get_accuracy_stats(self, response, id):
+        """Add Sig. Strike and Takedown accuracy stats to the fighter dictionary.
+
+        Args:
+            response: Response to the current page.
+            id string: Unique id for the fighter.
+        """
         accuracy_list = response.css(".c-overlap__stats-value::text , .c-overlap__stats-text::text").extract()
         percent_list = response.css("text.e-chart-circle__percent::text").extract()
-        if len(percent_list) != 2:
-            return False
-        
-
-        percent = percent_list[1]
-        percent = percent.replace("%", "")
-        takedowns_percent = int(percent) / 100
+        percent = -1
+            
         if len(accuracy_list) != 8:
            accuracy_list = self.helper.fix_accuracy_lists(accuracy_list)
            
-
         accuracy_dict = self.helper.list_to_dict(accuracy_list)
         
-
-        if accuracy_dict["Takedowns Landed"] == "":
-            accuracy_dict["Takedowns Landed"] = round(takedowns_percent * int(accuracy_dict["Takedowns Attempted"]))
-            
-
+        if len(percent_list) == 2:
+            percent = percent_list[1]
+            percent = percent.replace("%", "")
+            takedowns_percent = int(percent) / 100
+        else:
+            accuracy_dict["Takedowns Landed"] = 0
+            accuracy_dict["Takedowns Attempted"] = 0
         
-        self.add_items(accuracy_dict, "accuracy stats")
-        return True
+        if accuracy_dict["Takedowns Landed"] == "" and percent != -1:
+            accuracy_dict["Takedowns Landed"] = round(takedowns_percent * int(accuracy_dict["Takedowns Attempted"]))
+ 
+        self.add_items(accuracy_dict, id)
         
     
-    def add_items(self, dict, func):
+    def add_items(self, dict, id):
+        """Function for adding stats to the fighter dictionary. 
+
+        Args:
+            dict dictionary: Dictionary of stats to be added.
+            id string: Unique id for the fighter.
+        """
         for label, value in dict.items():
             new_label = label.strip()
             new_label = new_label.replace(" ", "_")
             new_label = new_label.replace(".", "")
             new_label = new_label.replace("/","_")
-            self.data[new_label] = value
-
+            self.fighters[id][new_label] = value
+            
     
-    def get_misc_stats(self, response):
-        misc_values = response.css('.c-stat-3bar__value::text').extract()
-        misc_labels = response.css('.c-stat-3bar__label::text').extract()
+    def get_area_stats(self, response, id):
+        """Add Strikes by area to the fighter dictionary.
 
-        misc_dict = self.helper.lists_to_dict(misc_labels, misc_values)
-        self.add_items(misc_dict, "misc stats")
+        Args:
+            response: Response to the current page.
+            id string: Unique id for the fighter.
+        """
+        area_values = response.css('.c-stat-3bar__value::text').extract()
+        area_labels = response.css('.c-stat-3bar__label::text').extract()
+
+        area_dict = self.helper.lists_to_dict(area_labels, area_values)
+        self.add_items(area_dict, id)
 
 
-    def get_target_stats(self, response):
+    def get_target_stats(self, response, id):
+        """Add strikes by target to the fighter dictionary.
+
+        Args:
+            response: Response to the current page.
+            id string:Unique id for the fighter.
+        """
         sig_strike_head = response.css('text#e-stat-body_x5F__x5F_head_value::text').extract_first()
         sig_strike_body = response.css('text#e-stat-body_x5F__x5F_body_value::text').extract_first()
         sig_strike_leg = response.css('text#e-stat-body_x5F__x5F_leg_value::text').extract_first()
         if sig_strike_head != None:
-            self.data['Sig_Str_Head'] = sig_strike_head
+            self.fighters[id]['Sig_Str_Head'] = sig_strike_head
         if sig_strike_body != None:
-            self.data['Sig_Str_Body'] = sig_strike_body
+            self.fighters[id]['Sig_Str_Body'] = sig_strike_body
         if sig_strike_leg != None:
-            self.data['Sig_Str_Leg'] = sig_strike_leg
+            self.fighters[id]['Sig_Str_Leg'] = sig_strike_leg
 
 
-    def get_base_stats(self,response):      
-        comparison_list = response.css(".c-stat-compare__label::text , .c-stat-compare__number::text").extract()
-        cleaned = []
+    def get_base_stats(self,response, id):
+        """Add the main fighter stats to the fighter dictionary. 
 
-        for data in comparison_list:
+        Args:
+            response: Response to the current page.
+            id string: Unique id for the fighter.
+        """
+        comparison_list = response.css(".c-stat-compare__label::text , .c-stat-compare__number::text").extract()    
+
+        for i, data in enumerate(comparison_list):
             clean_data = data.strip()
-            cleaned.append(clean_data)
+            comparison_list[i] = clean_data
        
-
-        if len(cleaned) == 15:
-            cleaned = self.helper.fix_base_lists(cleaned)
-
+        if len(comparison_list) == 15:
+            comparison_list = self.helper.fix_base_lists(comparison_list)
                            
-        if len(cleaned) == 16:
-            cleaned = self.helper.swap(cleaned)
+        if len(comparison_list) == 16:
+            cleaned = self.helper.swap(comparison_list)
             comp_dict = self.helper.list_to_dict(cleaned)
-            self.add_items(comp_dict, "base stats")
-            return True
-        else:
-            return False
+            self.add_items(comp_dict, id)
+            
+        
         
 
-    def get_bio(self, response):
+    def get_bio(self, response, id):
+        """Add the personal information about the fighter to the fighter dictionary.
+
+        Args:
+            response: Response to the current page.
+            id string: Unique id for the fighter.
+        """
         bio_values = response.css('.c-bio__text::text').extract()
         bio_labels = response.css('.c-bio__label::text').extract()
-        age = response.css('.field--name-age::text').extract_first()
-
+        age = response.css('.field--name-age::text').extract_first() 
+    
         bio_values = self.helper.clean_list(bio_values)
         if age:
             age_idx = bio_labels.index("Age")
             bio_values.insert(age_idx, age)
         
         bio_values = self.helper.clean_list(bio_values)
-       
-        bio_dict = self.helper.lists_to_dict(bio_labels, bio_values)
-       
+        bio_dict = self.helper.lists_to_dict(bio_labels, bio_values)  
         
-        self.add_items(bio_dict, "bio")
+        self.add_items(bio_dict, id)
+
+    
 
           
     

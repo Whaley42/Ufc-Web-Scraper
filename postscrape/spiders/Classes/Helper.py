@@ -1,5 +1,4 @@
 import itertools
-from pyspark.sql.types import StructType,StructField, StringType, IntegerType
 from bs4 import BeautifulSoup
 
 
@@ -9,6 +8,15 @@ class Helper:
         self.current_id = 0
 
     def fix_accuracy_lists(self, lst):
+        """Accuracy lists often times contain missing information. This function adds
+            blank strings for missing information.
+
+        Args:
+            lst list: The list to be fixed.
+
+        Returns:
+            list: The updated list.
+        """
         updated_list = []
         final = ""
         for curr, next in self.pairwise(lst):
@@ -32,6 +40,17 @@ class Helper:
         return updated_list
 
     def fix_base_lists(self, cleaned):
+        """Base lists often contain missing information. This function will add
+            blank strings depending on what information is missing. If something 
+            important is missing or can't be calculated, it will return a non full list
+            (a list that != 16) so it will not be added to the figther dictionary.
+
+        Args:
+            cleaned list: A cleaned list.
+
+        Returns:
+            list: An updated list if applicable, otherwise will return the same list.
+        """
         updated_list = []
         final = ""
         for i in range(0, len(cleaned) - 1):
@@ -56,11 +75,28 @@ class Helper:
         return updated_list
 
     def pairwise(self, iterable):
+        """Helper function for interating the current and next item in a list.
+
+        Args:
+            iterable list: list to get the current and next item
+
+        Returns:
+            iterator: iterator to be used in the function.
+        """
         a,b = itertools.tee(iterable)
         next(b,None)
         return zip(a,b)
 
     def swap(self, lst):
+        """Swaps every pair of elements in a list. This is a helper function
+            for adding stats to the fighter dictionary.
+
+        Args:
+            lst list: list that needs to have the elements swapped.
+
+        Returns:
+            list: Updated list with the swapped elements
+        """
         for i in range(0, len(lst) - 1, 2):
             lst[i], lst[i + 1] = lst[i + 1], lst[i]
         return lst
@@ -87,14 +123,6 @@ class Helper:
             res[label] = val
         return res
 
-    def seperate_tables(self, data):
-        bio_data = dict(itertools.islice(data.items(), 0, 9))
-        length = len(data.items())
-        fact_data = dict(itertools.islice(data.items(), 9, length))
-        fact_data["Bio_ID"] = bio_data["Bio_ID"]
-        
-        return bio_data, fact_data
-
     def fight_stats(self, response, name):
         soup = BeautifulSoup(response.text, "html.parser")
         total_fights = soup.find_all(class_='c-card-event--athlete-results__results')
@@ -104,10 +132,8 @@ class Helper:
         
         total_wins = 0
         if len(wins_blue) > 1:
-            # print(f"Length of list: {len(wins_blue)}" )
+            
             for i in range(1, len(wins_blue)):
-                # print(f"Current index: {i}")
-                # print(f"Length of blue list: {len(wins_blue)} Current index: {i}")
                 curr = wins_blue[i].get_text().strip()
                 
                 prev = wins_blue[i-1].get_text().strip()
@@ -122,7 +148,6 @@ class Helper:
         
         if len(wins_red) > 1:
             for i in range(1, len(wins_red)):
-                # print(f"Length of red list {len(wins_red)} Current index: {i}")
                 
                 curr = wins_red[i].get_text().strip()
                 prev = wins_red[i-1].get_text().strip()
@@ -136,60 +161,17 @@ class Helper:
                         total_wins += 1
         return len(total_fights), total_wins
 
-    def increment_id(self):
-        self.current_id += 1
 
-    def create_schemas(self):
-
-        schema_fact = StructType([ \
-        StructField("ID",IntegerType(),True), \
-        StructField("Sig. Strikes Landed",StringType(),True), \
-        StructField("Sig. Strikes Attempted",StringType(),True), \
-        StructField("Sig. Strikes Landed Per Min", StringType(), True), \
-        StructField("Sig. Strikes Absorbed Per Min", StringType(), True), \
-        StructField("Sig. Strike Defense", StringType(), True), \
-        StructField("Knockdown Average",StringType(),True), \
-        StructField("Sig. Strikes Standing",StringType(),True), \
-        StructField("Sig. Strikes Clinch",StringType(),True), \
-        StructField("Sig. Strikes Ground", StringType(), True), \
-        StructField("Sig. Strikes Head", StringType(), True), \
-        StructField("Sig. Strikes Body", StringType(), True), \
-        StructField("Sig. Strikes Leg",StringType(),True), \
-        StructField("Takedowns Landed",StringType(),True), \
-        StructField("Takedowns Attempted", StringType(), True), \
-        StructField("Takedown Average", StringType(), True), \
-        StructField("Takedown Defense", StringType(), True), \
-        StructField("Submission Average", StringType(), True), \
-        StructField("KO/TKO",StringType(),True), \
-        StructField("DEC",StringType(),True), \
-        StructField("SUB", StringType(), True), \
-        StructField("Reach", StringType(), True), \
-        StructField("Leg Reach", StringType(), True), \
-        StructField("Age", StringType(), True), \
-        StructField("Height", StringType(), True), \
-        StructField("Average Fight Time", StringType(), True), \
-        StructField("Number_of_Fights", IntegerType(), True), \
-        StructField("Wins", IntegerType(), True) \
-            ])     
-
-        schema_bio = StructType([ \
-        StructField("ID",IntegerType(),True), \
-        StructField("First_Name",StringType(),True), \
-        StructField("Last_Name",StringType(),True), \
-        StructField("Division", StringType(), True), \
-        StructField("Status", StringType(), True), \
-        StructField("Hometown", StringType(), True), \
-        StructField("Fighting_Style",StringType(),True), \
-        StructField("Trains_At",StringType(),True), \
-        StructField("Octagon_Debut",StringType(),True) \
-            ])
-
-        return schema_fact, schema_bio
 
     def reset_data(self):
+        """Creates a clean, blank dictionary for a new fighter.
+
+        Returns:
+            dictionary: The formatted dictionary.
+        """
 
         data = {
-            "Bio_ID": self.current_id,
+            "id": self.current_id,
             "first_name":"",
             "last_name":"",
             "Division":"",
@@ -198,7 +180,6 @@ class Helper:
             "Fighting_style":"",
             "Trains_at":"",
             "Octagon_Debut":"",
-
             "Sig_Strikes_Landed": "",
             "Sig_Strikes_Attempted":"",
             "Sig_Str_Landed": "",
@@ -225,9 +206,10 @@ class Helper:
             "Height":"",
             "Average_fight_time":"",
             "Fights":0,
-            "Wins":-1
+            "Wins":0
         }
-        
+
+        self.current_id +=1
 
         
 
