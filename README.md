@@ -1,7 +1,8 @@
 # UFC Data Project
 
 ## Goal of this Project:
-    Scrape UFC fighter data that can be used to create an end-user dashboard to query and compare fighters.
+    Scrape UFC fighter data that can be used to create an end-user dashboard to 
+    query and compare fighters.
 
 ## The Process:
 ### Web Scraping
