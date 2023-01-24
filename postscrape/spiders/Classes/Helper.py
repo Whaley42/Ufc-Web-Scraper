@@ -102,13 +102,28 @@ class Helper:
         return lst
 
     def list_to_dict(self, data):
+        """Function to make a list into a dictionary.
 
+        Args:
+            data list: list to made into a dictionary
+
+        Returns:
+            dictionary: Dictionary to be used for fighter data.
+        """
         value = iter(data)
         res_dct = dict(zip(value, value))
         
         return res_dct
 
     def clean_list(self, values):
+        """Clean the list of empty white space and tabs
+
+        Args:
+            values list: List to be cleaned.
+
+        Returns:
+            list: The cleaned list.
+        """
         res = []
         for val in values:
             val = val.strip()
@@ -118,12 +133,31 @@ class Helper:
         return res
 
     def lists_to_dict(self, labels, values):
+        """Make two lists of labels and values into one dictionary. 
+
+        Args:
+            labels list: List of labels.
+            values list: List of values.
+
+        Returns:
+            dictionary: Dictionary made up from the lists.
+        """
         res = {}
         for label, val in zip(labels, values):
             res[label] = val
         return res
 
     def fight_stats(self, response, name):
+        """Uses BS4 to find the amount of wins and fights. Can be updated to use scrapy response
+            instead of BS4. 
+
+        Args:
+            response: Response to the current page.
+            name string: name of the current fighter 
+
+        Returns:
+            tuple: the amount of fights and wins.
+        """
         soup = BeautifulSoup(response.text, "html.parser")
         total_fights = soup.find_all(class_='c-card-event--athlete-results__results')
         
@@ -164,7 +198,7 @@ class Helper:
 
 
     def reset_data(self):
-        """Creates a clean, blank dictionary for a new fighter.
+        """Creates a clean, formatted dictionary for a new fighter.
 
         Returns:
             dictionary: The formatted dictionary.
