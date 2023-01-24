@@ -168,29 +168,21 @@ class Helper:
         if len(wins_blue) > 1:
             
             for i in range(1, len(wins_blue)):
-                curr = wins_blue[i].get_text().strip()
-                
+                curr = wins_blue[i].get_text().strip()   
                 prev = wins_blue[i-1].get_text().strip()
                 
                 if curr != "Win":
-
                     right_name = curr.split(" ")[2]
-                    
-                
                     if prev == "Win" and right_name == name:
                         total_wins += 1
         
         if len(wins_red) > 1:
-            for i in range(1, len(wins_red)):
-                
+            for i in range(1, len(wins_red)):           
                 curr = wins_red[i].get_text().strip()
                 prev = wins_red[i-1].get_text().strip()
 
-                if curr != "Win":
-                    
-                    left_name = curr.split(" ")[0]
-                
-                
+                if curr != "Win":            
+                    left_name = curr.split(" ")[0]      
                     if prev == "Win" and left_name == name:
                         total_wins += 1
         return len(total_fights), total_wins
