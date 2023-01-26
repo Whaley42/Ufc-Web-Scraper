@@ -1,5 +1,4 @@
 import itertools
-from bs4 import BeautifulSoup
 
 
 class Helper:
@@ -20,13 +19,10 @@ class Helper:
         updated_list = []
         final = ""
         for curr, next in self.pairwise(lst):
-
             final = next
-            temp_next = next.replace(" ", "")
-            temp_curr = curr.replace(" ", "")
-            next_alpha = temp_next.isalpha()
-            curr_alpha = temp_curr.isalpha()
-
+            next_alpha = next.replace(" ", "").isalpha()
+            curr_alpha = curr.replace(" ", "").isalpha()
+            
             if next_alpha and curr_alpha:
                 updated_list.append(curr)
                 updated_list.append("")
@@ -52,15 +48,10 @@ class Helper:
             list: An updated list if applicable, otherwise will return the same list.
         """
         updated_list = []
-        final = ""
         for i in range(0, len(cleaned) - 1):
-            final = cleaned[i+1]
-            temp_curr = cleaned[i].replace(" ", "")
-            temp_curr = temp_curr.replace(".", "")
-            temp_next = cleaned[i+1].replace(" ", "")
-            temp_next = temp_next.replace(".", "")
+            temp_curr = cleaned[i].replace(" ", "").replace(".","")
+            temp_next = cleaned[i+1].replace(" ", "").replace(".","")
             
-
             if temp_curr.isalpha() and temp_next.isalpha():
                 if temp_next == "TakedownDefense":
                     updated_list.append(cleaned[i])
@@ -70,7 +61,7 @@ class Helper:
             else:
                 updated_list.append(cleaned[i])
             
-        updated_list.append(final)
+        updated_list.append(cleaned[-1])
 
         return updated_list
 
@@ -124,12 +115,8 @@ class Helper:
         Returns:
             list: The cleaned list.
         """
-        res = []
-        for val in values:
-            val = val.strip()
-            val = val.replace('\n', '')
-            if val != '':
-                res.append(val)
+        res = [val.strip().replace('\n','') for val in values if val != '']
+
         return res
 
     def lists_to_dict(self, labels, values):
@@ -148,8 +135,8 @@ class Helper:
         return res
 
     def fight_stats(self, response, name):
-        """Uses BS4 to find the amount of wins and fights. Can be updated to use scrapy response
-            instead of BS4. 
+        """Finds the amount of wins and fights for each fighter. Due to how the UFC has the
+            wins, it is easier to split up between red and blue to get all of the wins. 
 
         Args:
             response: Response to the current page.
@@ -158,33 +145,29 @@ class Helper:
         Returns:
             tuple: the amount of fights and wins.
         """
-        soup = BeautifulSoup(response.text, "html.parser")
-        total_fights = soup.find_all(class_='c-card-event--athlete-results__results')
         
-        wins_blue = soup.select('.c-card-event--athlete-results__headline , .c-card-event--athlete-results__blue-image .win')
-        wins_red = soup.select('.c-card-event--athlete-results__headline , .c-card-event--athlete-results__red-image .win')
+        total_fights = response.css('.c-card-event--athlete-results__results')
         
+        fights_blue = response.css('.c-card-event--athlete-results__headline::text , .c-card-event--athlete-results__blue-image .win::text').extract()
+        fights_red = response.css('.c-card-event--athlete-results__headline::text , .c-card-event--athlete-results__red-image .win::text').extract()
+        fights_blue = [blue.strip() for blue in fights_blue]
+        fights_red = [red.strip() for red in fights_red]
         total_wins = 0
-        if len(wins_blue) > 1:
-            
-            for i in range(1, len(wins_blue)):
-                curr = wins_blue[i].get_text().strip()   
-                prev = wins_blue[i-1].get_text().strip()
-                
-                if curr != "Win":
-                    right_name = curr.split(" ")[2]
-                    if prev == "Win" and right_name == name:
-                        total_wins += 1
-        
-        if len(wins_red) > 1:
-            for i in range(1, len(wins_red)):           
-                curr = wins_red[i].get_text().strip()
-                prev = wins_red[i-1].get_text().strip()
 
-                if curr != "Win":            
-                    left_name = curr.split(" ")[0]      
-                    if prev == "Win" and left_name == name:
+        for curr,nxt in self.pairwise(fights_blue):
+            if curr == "Win":
+                right_name = nxt.split(" ")[2]
+                if right_name == name:
+                    total_wins +=1
+              
+        for curr,nxt in self.pairwise(fights_red):           
+            if curr == "Win":            
+                left_name = nxt.split(" ")[0]      
+                if left_name == name:
                         total_wins += 1
+
+ 
+      
         return len(total_fights), total_wins
 
 

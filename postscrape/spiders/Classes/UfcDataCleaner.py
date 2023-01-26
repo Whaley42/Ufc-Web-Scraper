@@ -32,19 +32,16 @@ class UfcDataCleaner:
         month = self.month_to_num(split[0])
         day = split[1].replace(",","")
         year = split[2]
-        
         fighter_data["Octagon_Debut"] = datetime.date(int(year), int(month), int(day))
 
         for dataK, dataV in fighter_data.items():
-
-            data = dataV
             if isinstance(dataV, str):
-                data = data.strip()
+                data = dataV.strip()
                 if '%' in data:
                     data_list = data.split(" ")
                     data = data_list[0] 
             
-            fighter_data[dataK] = data
+                fighter_data[dataK] = data
       
         return fighter_data
     
