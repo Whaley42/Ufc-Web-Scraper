@@ -8,20 +8,7 @@ from HelperClasses.Transform import transform_data
 from HelperClasses.GoogleConnector import connect
 import datetime
 import pandas as pd
-
-
-
-
-def update():
-    """
-    Update the user refresh token and send them a monthly an email update of their most
-    listened to songs, artists, and genres. Also create a new Spotify playlist based
-    on their recent listens.
-    """
-
    
-
-
 with DAG(
     dag_id="Airflow-Ufc",
     schedule_interval="0 10 * * 0",
