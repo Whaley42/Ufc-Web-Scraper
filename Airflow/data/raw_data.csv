@@ -1,0 +1,12 @@
+id,first_name,last_name,Division,Status,Place_of_Birth,Fighting_style,Trains_at,Octagon_Debut,Sig_Strikes_Landed,Sig_Strikes_Attempted,Sig_Str_Landed,Sig_Str_Absorbed,Sig_Str_Defense,Knockdown_Avg,Standing,Clinch,Ground,Sig_Str_Head,Sig_Str_Body,Sig_Str_Leg,Takedowns_Landed,Takedowns_Attempted,Takedown_avg,Takedown_Defense,Submission_avg,KO_TKO,DEC,SUB,Reach,Leg_reach,Age,Height,Average_fight_time,Fights,Wins
+0,Klidson,Abreu,Light Heavyweight,Not Fighting,"Manaus, Brazil",Brazilian Jiu-Jitsu,,2019-02-23,96,236,2.05,2.90,56,0.00,86,10,0,38,20,38,2,10,0.64,80,0.00,4,1,10,74.00,40.00,29,74.00,11.72,4,1
+1,Angga,-,Featherweight,,"Sukabumi, Indonesia",,,2022-06-10,34,88,3.56,3.77,53,0.00,30,4,0,17,6,11,0,4,0.00,33,0.00,0,0,0,,,33,,9.55,0,0
+2,Daichi,Abe,Welterweight,Not Fighting,"Niigata Prefecture, Japan",,,2017-09-22,171,508,3.80,4.49,57,0.33,146,11,14,102,12,57,1,2,0.33,,0.00,4,2,0,71.50,42.00,30,69.00,15.0,3,1
+3,Tank,Abbott,Heavyweight,Not Fighting,"Huntington Beach, United States",,,1995-07-14,12,31,2.41,10.03,38,0.00,4,7,1,12,0,0,0,0,0.00,67,0.00,0,0,0,,,,72.00,1.67,17,8
+4,Nariman,Abbassov,Lightweight,,,,,2023-01-26,45,225,3.00,5.67,46,0.00,45,0,0,26,8,11,0,2,0.00,67,0.00,0,0,0,,,28,,15.0,0,0
+5,Asjabharan,_,Bantamweight,,,,,2023-01-26,,,,,,,0,0,0,0,0,0,0,0,,,,0,0,0,,,,,,0,0
+6,Danny,Abbadi,Lightweight,Not Fighting,"Orlando, United States",,,2006-06-24,59,155,3.29,4.41,58,0.00,42,14,3,51,8,0,0,0,0.00,78,0.00,0,0,0,,,38,71.00,8.97,2,0
+7,Hamdy,Abdelwahab,Heavyweight,Active,"Cairo, Egypt",Wrestler,,2022-07-30,58,110,3.87,3.13,59,1.00,30,2,26,51,5,2,3,4,3.00,,0.00,5,0,0,72.00,41.00,29,74.00,15.0,1,1
+8,Papy,Abedi,Middleweight,Not Fighting,,,,2011-11-05,97,176,2.80,3.15,49,0.00,36,34,27,42,46,9,8,14,3.47,50,1.30,5,2,2,74.00,,43,71.00,8.65,4,1
+9,Shamil,Abdurakhimov,Heavyweight,Active,"Dagestan Republic, Russia",Grappler,Fighting Eagle,2015-04-04,251,567,2.41,3.02,55,0.29,169,60,22,149,47,55,5,30,1.01,45,0.14,9,7,4,76.00,41.50,41,75.00,9.45,11,5
+10,Ricardo,Abreu,Middleweight,Retired,"Dourados, Brazil",,"Kings MMA - Huntington Beach, CA",2014-05-31,80,252,3.79,3.98,68,1.42,58,13,9,65,10,5,3,7,2.13,100,0.71,3,0,2,73.00,,37,71.00,10.55,1,1
