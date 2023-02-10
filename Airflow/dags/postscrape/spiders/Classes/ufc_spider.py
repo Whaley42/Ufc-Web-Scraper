@@ -33,10 +33,7 @@ class UfcSpider(scrapy.Spider):
         Args:
             response: response to the web page.
         """
-        if self.athlete_count == 0:
-            total_athletes = response.css(".althelete-total::text").extract_first()
-            self.athlete_count = 11
-        
+    
         athletes = response.css('.c-listing-athlete-flipcard__back')
         
         for athlete in athletes:
@@ -46,12 +43,12 @@ class UfcSpider(scrapy.Spider):
              
             yield scrapy.Request(url=athlete_link, callback=self.parse_athlete, priority=1)
                 
-        # self.next_page_num += 1
+        self.next_page_num += 1
         
-        # if len(athletes) != 0:
-        #     self.current_page += 1
-        #     self.next_page = self.base_url + str(self.next_page_num)
-        #     yield response.follow(url=self.next_page, callback=self.parse)
+        if len(athletes) != 0:
+            self.current_page += 1
+            self.next_page = self.base_url + str(self.next_page_num)
+            yield response.follow(url=self.next_page, callback=self.parse)
         
       
 

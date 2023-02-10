@@ -7,7 +7,6 @@ from postscrape.spiders.Main import run
 from HelperClasses.Transform import transform_data
 from HelperClasses.GoogleConnector import connect
 import datetime
-import pandas as pd
    
 with DAG(
     dag_id="Airflow-Ufc",
