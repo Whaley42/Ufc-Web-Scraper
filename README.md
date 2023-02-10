@@ -1,10 +1,13 @@
 # UFC Data Project
 
-## Goal of this Project:
-    Scrape UFC fighter data that can be used to create an end-user dashboard to 
-    query and compare fighters.
+## Problem:
+The UFC community lacks a resource that lets people query specific athlete data.
 
-## The Process:
+## Goal:
+Create an front-end that lets users query specific data from all relevant athletes or compare athletes for a more visual experience. 
+
+## Overview:
+![alt text](https://imgur.com/a/3DlgSxT)
 ### Web Scraping
 Web scrape fighter data off the official UFC website to get accurate data about all current and former fighters.
 The web scraping will be done using Scrapy. I decided to be use Scrapy because it is asyncronous which has been shown to be faster when web scraping compared to syncronous execution and multi threading. After the data is scraped and stored in python, it will be stored into a csv file and sent to an S3 Bucket on AWS.
