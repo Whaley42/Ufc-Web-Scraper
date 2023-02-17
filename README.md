@@ -4,7 +4,7 @@
 The UFC community lacks a resource that lets people query specific athlete data.
 
 ## Goal:
-Create an front-end that lets users query specific data from all relevant athletes or compare athletes for a more visual experience. 
+Create a front-end that lets users query specific data from all relevant athletes or compare athletes for a more visual experience. 
 
 ## Overview:
 ![ufc-diagram](https://user-images.githubusercontent.com/23240195/218166935-f794ad91-e1d7-49ee-af03-cea53d4f88a9.png)
